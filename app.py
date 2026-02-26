@@ -209,30 +209,27 @@ if page == "🏠 대시보드":
     st.markdown("""<div class="header-bar">
         <div>
             <div class="logo-main">📊 Portfolio AI</div>
-            <div class="logo-sub">실시간 자산 관리 & AI 투자 전략 플랫폼 · Powered by Notion DB</div>
+            <div class="logo-sub">실시간 자산 관리 & AI 투자 전략 플랫폼</div>
         </div>
     </div>""", unsafe_allow_html=True)
-
-    # Notion 미설정 안내
-    if not nc["fully_ready"]:
-        st.warning("⚠️ Notion DB가 완전히 설정되지 않았습니다. 사이드바 → API 설정에서 포트폴리오 DB ID와 스크랩 DB ID를 입력해주세요.")
 
     # 시장 지수
     st.markdown('<div class="sec">📡 실시간 시장 지표</div>', unsafe_allow_html=True)
     with st.spinner("시장 데이터 로딩 중…"):
         indices = get_market_indices()
+
     if indices:
         cols_per_row = 6
         for i in range(0, len(indices), cols_per_row):
             cols = st.columns(cols_per_row)
             for j, idx in enumerate(indices[i:i+cols_per_row]):
                 chg = idx["change_pct"]
-                cls = chg_cls(chg)
+                cls = chg_cls(chg); arrow = chg_arrow(chg)
                 with cols[j]:
                     st.markdown(f"""<div class="idx-pill">
                         <div class="idx-name">{idx['name']}</div>
                         <div class="idx-val {cls}">{idx['value']:,.2f}</div>
-                        <div class="idx-chg {cls}">{chg_arrow(chg)} {abs(chg):.2f}%</div>
+                        <div class="idx-chg {cls}">{arrow} {abs(chg):.2f}%</div>
                     </div>""", unsafe_allow_html=True)
 
     st.markdown("---")
