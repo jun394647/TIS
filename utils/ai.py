@@ -9,23 +9,38 @@ import os
 from datetime import datetime
 
 
-# ── 사용 가능한 모델 후보 (최신 → 구버전 순) ──────────────────────────────────
+# ── 사용 가능한 모델 후보 ─────────────────────────────────────────────────────
+# 무료 티어 할당량이 넉넉한 모델을 앞에 배치
+# gemini-1.5-flash-8b : 무료 티어 RPM/RPD 가장 넉넉함
+# gemini-2.0-flash    : 무료 할당량 소진 시 자동 폴백
 CANDIDATE_MODELS = [
-    "gemini-2.5-flash",
-    "gemini-2.0-flash-lite",
-    "gemini-1.5-flash",
-    "gemini-1.5-flash-latest",
+    "gemini-2.5-flash",          # 무료 RPD 1500
+    "gemini-2.0-flash-lite",     # 무료 RPD 1000
+    "gemini-2.0-flash",          # 무료 RPD 200 (소진 잦음)
     "gemini-1.5-pro",
     "gemini-pro",
 ]
 
+# 다음 모델로 폴백해야 하는 오류 코드/키워드
+_FALLBACK_SIGNALS = (
+    "not found", "404",
+    "quota", "429", "resource_exhausted",
+    "invalid argument", "model",
+)
+
+
+def _should_fallback(err: str) -> bool:
+    e = err.lower()
+    return any(s in e for s in _FALLBACK_SIGNALS)
+
 
 def _call_new_sdk(api_key: str, prompt: str) -> str:
-    """google-genai (신규 SDK) 로 호출"""
+    """google-genai (신규 SDK) 로 호출 — 할당량 초과 시 다음 모델로 자동 폴백"""
     from google import genai
     from google.genai import types
 
     client = genai.Client(api_key=api_key)
+    last_err = ""
 
     for model_name in CANDIDATE_MODELS:
         try:
@@ -34,39 +49,40 @@ def _call_new_sdk(api_key: str, prompt: str) -> str:
                 contents=prompt,
                 config=types.GenerateContentConfig(
                     temperature=0.65,
-                    max_output_tokens=2500,
+                    max_output_tokens=8192,
                 ),
             )
             return response.text
         except Exception as e:
-            err = str(e)
-            # 모델 없음 → 다음 모델 시도
-            if "not found" in err.lower() or "invalid" in err.lower() and "model" in err.lower():
-                continue
-            # API 키 오류 등 치명적 오류 → 즉시 raise
-            raise
-    raise RuntimeError("사용 가능한 Gemini 모델이 없습니다.")
+            last_err = str(e)
+            if _should_fallback(last_err):
+                continue          # 다음 모델 시도
+            raise                 # API 키 오류 등 → 즉시 중단
+
+    raise RuntimeError(f"모든 모델 할당량 초과 또는 사용 불가.\n마지막 오류: {last_err}")
 
 
 def _call_old_sdk(api_key: str, prompt: str) -> str:
-    """google-generativeai (구 SDK) 로 호출"""
+    """google-generativeai (구 SDK) 로 호출 — 할당량 초과 시 다음 모델로 자동 폴백"""
     import google.generativeai as genai
     genai.configure(api_key=api_key)
+    last_err = ""
 
     for model_name in CANDIDATE_MODELS:
         try:
             model = genai.GenerativeModel(model_name)
             resp = model.generate_content(
                 prompt,
-                generation_config={"temperature": 0.65, "max_output_tokens": 2500},
+                generation_config={"temperature": 0.65, "max_output_tokens": 8192},
             )
             return resp.text
         except Exception as e:
-            err = str(e)
-            if "not found" in err.lower() or "404" in err:
+            last_err = str(e)
+            if _should_fallback(last_err):
                 continue
             raise
-    raise RuntimeError("사용 가능한 Gemini 모델이 없습니다.")
+
+    raise RuntimeError(f"모든 모델 할당량 초과 또는 사용 불가.\n마지막 오류: {last_err}")
 
 
 def _build_prompt(portfolio_df, scraps: list, market_indices: list, prompt_extra: str) -> str:
@@ -163,16 +179,30 @@ def get_gemini_analysis(portfolio_df, scraps: list, market_indices: list, prompt
     except ImportError:
         old_sdk_err = "google-generativeai 미설치"
 
-    # ── 둘 다 실패 ────────────────────────────────────────────────────────────
+    # ── 둘 다 실패 — 오류 유형별 메시지 ─────────────────────────────────────────
+    combined = (new_sdk_err + old_sdk_err).lower()
+
+    if "quota" in combined or "429" in combined or "resource_exhausted" in combined:
+        return (
+            "⚠️ **Gemini 무료 할당량 초과**\n\n"
+            "오늘 모든 모델의 무료 요청 한도를 소진했습니다.\n\n"
+            "**해결 방법:**\n"
+            "- ⏰ 내일(UTC 자정 이후) 다시 시도\n"
+            "- 💳 결제 수단 등록 시 유료 플랜으로 한도 대폭 증가\n"
+            "  → https://aistudio.google.com/app/apikey\n\n"
+            "**무료 티어 일일 한도:**\n"
+            "- gemini-1.5-flash-8b : 1,500 요청/일\n"
+            "- gemini-1.5-flash    : 1,500 요청/일\n"
+            "- gemini-2.0-flash    : 200 요청/일"
+        )
+    if "api_key_invalid" in combined or "api key not valid" in combined:
+        return (
+            "⚠️ **Gemini API 키가 유효하지 않습니다**\n\n"
+            "https://aistudio.google.com/app/apikey 에서 키를 재발급 후\n"
+            "사이드바 → API 설정에서 다시 입력해주세요."
+        )
     return (
         f"⚠️ Gemini 연결 실패\n\n"
-        f"**신규 SDK (google-genai):** {new_sdk_err}\n\n"
-        f"**구 SDK (google-generativeai):** {old_sdk_err}\n\n"
-        "**해결 방법:**\n"
-        "```bash\n"
-        "pip install -U google-genai\n"
-        "# 또는\n"
-        "pip install -U google-generativeai\n"
-        "```\n"
-        "API 키는 https://aistudio.google.com/app/apikey 에서 발급받으세요."
+        f"**신규 SDK:** {new_sdk_err[:300]}\n\n"
+        f"**구 SDK:** {old_sdk_err[:300]}"
     )
