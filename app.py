@@ -14,14 +14,16 @@ except ImportError:
     pass
 
 def _get_secret(key: str, default: str = "") -> str:
+    """st.secrets → os.environ 순으로 조회. 공백/줄바꿈 제거."""
     try:
         val = st.secrets.get(key, "")
-        if val: return val
+        if val and str(val).strip(): return str(val).strip()
     except Exception:
         pass
-    return os.getenv(key, default)
+    return os.getenv(key, default).strip()
 
-for _k in ("GEMINI__KEY", "NOTION__KEY",
+# 앱 시작 시 secrets → environ 동기화 (notion_db.py는 os.getenv만 사용)
+for _k in ("GEMINI_API_KEY", "NOTION_API_KEY",
            "NOTION_PORTFOLIO_DB_ID", "NOTION_SCRAP_DB_ID"):
     _v = _get_secret(_k)
     if _v: os.environ[_k] = _v
@@ -52,7 +54,7 @@ st.set_page_config(page_title="Portfolio AI", page_icon="📈",
 # ── CSS ────────────────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
-@import url('https://fonts.googles.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&family=Space+Mono:wght@400;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&family=Space+Mono:wght@400;700&display=swap');
 :root {
     --bg:#06090f; --bg1:#0c1220; --bg2:#111c2e; --bg3:#172238;
     --accent:#00e5b4; --accent2:#4d9fff; --accent3:#f59e0b;
@@ -119,24 +121,24 @@ with st.sidebar:
     </div>""", unsafe_allow_html=True)
     st.markdown("---")
 
-    page = st.radio("", [
+    page = st.radio("메뉴", [
         "🏠 대시보드", "💼 포트폴리오 관리", "₿ 암호화폐",
         "📰 뉴스 & 리서치", "📎 스크랩북", "🤖 AI 분석",
     ], label_visibility="collapsed")
 
     st.markdown("---")
 
-    #설정
-    with st.expander("⚙️  설정", expanded=False):
+    # API 설정
+    with st.expander("⚙️ API 설정", expanded=False):
         st.markdown("<div style='font-size:11px;color:#6b7f99;margin-bottom:8px;'>Streamlit Cloud → Secrets에서 자동 로드</div>", unsafe_allow_html=True)
-        g_key = st.text_input("Gemini  Key", value="", type="password", key="gkey")
-        n_key = st.text_input("Notion  Key", value="", type="password", key="nkey")
+        g_key = st.text_input("Gemini API Key", value="", type="password", key="gkey")
+        n_key = st.text_input("Notion API Key", value="", type="password", key="nkey")
         p_db  = st.text_input("포트폴리오 DB ID", value="", key="pdb")
         s_db  = st.text_input("스크랩 DB ID",     value="", key="sdb")
-        if g_key: os.environ["GEMINI_API_KEY"] = g_key
-        if n_key: os.environ["NOTION_API_KEY"] = n_key
-        if p_db:  os.environ["NOTION_PORTFOLIO_DB_ID"] = p_db
-        if s_db:  os.environ["NOTION_SCRAP_DB_ID"] = s_db
+        if g_key: os.environ["GEMINI_API_KEY"] = g_key.strip()
+        if n_key: os.environ["NOTION_API_KEY"] = n_key.strip()
+        if p_db:  os.environ["NOTION_PORTFOLIO_DB_ID"] = p_db.strip()
+        if s_db:  os.environ["NOTION_SCRAP_DB_ID"] = s_db.strip()
 
     # 연결 상태
     nc = check_notion_connection()
@@ -145,6 +147,40 @@ with st.sidebar:
     st.markdown(f"{'🟢' if nc['api_key'] else '🔴'} Notion API {'연결됨' if nc['api_key'] else '미설정'}")
     st.markdown(f"{'🟢' if nc['portfolio_db'] else '🔴'} 포트폴리오 DB {'연결됨' if nc['portfolio_db'] else '미설정'}")
     st.markdown(f"{'🟢' if nc['scrap_db'] else '🔴'} 스크랩 DB {'연결됨' if nc['scrap_db'] else '미설정'}")
+
+    # Notion 연결 테스트
+    if st.button("🔌 Notion 연결 테스트", use_container_width=True):
+        import requests as _req
+        _key = os.getenv("NOTION_API_KEY","").strip()
+        _pid = os.getenv("NOTION_PORTFOLIO_DB_ID","").strip()
+        _sid = os.getenv("NOTION_SCRAP_DB_ID","").strip()
+        _hdrs = {"Authorization": f"Bearer {_key}",
+                 "Notion-Version": "2022-06-28",
+                 "Content-Type": "application/json"}
+        if not _key:
+            st.error("❌ NOTION_API_KEY 미입력")
+        else:
+            # API 키 자체 유효성 확인
+            _r = _req.get("https://api.notion.com/v1/users/me", headers=_hdrs, timeout=10)
+            if _r.status_code == 200:
+                st.success(f"✅ API 키 유효: {_r.json().get('name','')}")
+            else:
+                st.error(f"❌ API 키 오류 ({_r.status_code}): {_r.json().get('message','')}")
+                st.code(f"현재 키 앞 10자: {_key[:10]}...")
+            # 포트폴리오 DB 확인
+            if _pid:
+                _r2 = _req.get(f"https://api.notion.com/v1/databases/{_pid}", headers=_hdrs, timeout=10)
+                if _r2.status_code == 200:
+                    st.success(f"✅ 포트폴리오 DB 연결됨")
+                else:
+                    st.error(f"❌ 포트폴리오 DB ({_r2.status_code}): {_r2.json().get('message','')}")
+            # 스크랩 DB 확인
+            if _sid:
+                _r3 = _req.get(f"https://api.notion.com/v1/databases/{_sid}", headers=_hdrs, timeout=10)
+                if _r3.status_code == 200:
+                    st.success(f"✅ 스크랩 DB 연결됨")
+                else:
+                    st.error(f"❌ 스크랩 DB ({_r3.status_code}): {_r3.json().get('message','')}")
 
     usd_krw = get_usd_krw_rate()
     jpy_krw = get_jpy_krw_rate()
@@ -179,7 +215,7 @@ if page == "🏠 대시보드":
 
     # Notion 미설정 안내
     if not nc["fully_ready"]:
-        st.warning("⚠️ Notion DB가 완전히 설정되지 않았습니다. 사이드바 →  설정에서 포트폴리오 DB ID와 스크랩 DB ID를 입력해주세요.")
+        st.warning("⚠️ Notion DB가 완전히 설정되지 않았습니다. 사이드바 → API 설정에서 포트폴리오 DB ID와 스크랩 DB ID를 입력해주세요.")
 
     # 시장 지수
     st.markdown('<div class="sec">📡 실시간 시장 지표</div>', unsafe_allow_html=True)
@@ -277,7 +313,7 @@ elif page == "💼 포트폴리오 관리":
     st.markdown('<div class="sec">💼 자산 포트폴리오 (Notion DB)</div>', unsafe_allow_html=True)
 
     if not nc["portfolio_db"]:
-        st.error("❌ Notion 포트폴리오 DB ID가 설정되지 않았습니다. 사이드바 →  설정에서 입력해주세요.")
+        st.error("❌ Notion 포트폴리오 DB ID가 설정되지 않았습니다. 사이드바 → API 설정에서 입력해주세요.")
         st.stop()
 
     tab_view, tab_add, tab_edit = st.tabs(["📋 보유 현황", "➕ 자산 추가", "✏️ 수정 / 삭제"])
@@ -590,26 +626,32 @@ elif page == "🤖 AI 분석":
     st.markdown('<div class="sec">🤖 AI 포트폴리오 분석</div>', unsafe_allow_html=True)
 
     if not gemini_ok:
-        st.warning("⚠️ 사이드바 →  설정에서 Gemini  키를 입력해주세요.")
+        st.warning("⚠️ 사이드바 → API 설정에서 Gemini API 키를 입력해주세요.")
 
     scraps_all = _cached_scraps()
+
+    # session_state 초기화 — 한 번만 실행됨
+    for _key, _val in [("ai_result", ""), ("ai_scrap_msg", "")]:
+        if _key not in st.session_state:
+            st.session_state[_key] = _val
+
     c1, c2, c3 = st.columns(3)
     with c1:
-        st.markdown(f"""<div class="stat-card">
+        st.markdown(f'''<div class="stat-card">
             <div class="stat-label">보유 자산</div>
             <div class="stat-value">{len(assets)}종목</div>
-        </div>""", unsafe_allow_html=True)
+        </div>''', unsafe_allow_html=True)
     with c2:
-        st.markdown(f"""<div class="stat-card">
+        st.markdown(f'''<div class="stat-card">
             <div class="stat-label">스크랩 정보</div>
             <div class="stat-value">{len(scraps_all)}건</div>
-        </div>""", unsafe_allow_html=True)
+        </div>''', unsafe_allow_html=True)
     with c3:
         ai_cnt = len([s for s in scraps_all if s.get("category")=="AI분석"])
-        st.markdown(f"""<div class="stat-card">
+        st.markdown(f'''<div class="stat-card">
             <div class="stat-label">AI 분석 이력</div>
             <div class="stat-value">{ai_cnt}회</div>
-        </div>""", unsafe_allow_html=True)
+        </div>''', unsafe_allow_html=True)
 
     st.markdown("---")
     col1, col2 = st.columns(2)
@@ -624,25 +666,44 @@ elif page == "🤖 AI 분석":
     prompt_extra = st.text_area("추가 질문 / 특이사항",
         placeholder="예: 미국 금리 인하 시 대응 방법은?\n예: 달러 현금 비중을 높이고 싶습니다.",
         height=90)
-    full_prompt = f"[분석 중점: {', '.join(focus)}] [리스크 선호도: {risk_pref}]\n{prompt_extra}"
+    _focus_str = ", ".join(focus)
+    full_prompt = f"[분석 중점: {_focus_str}] [리스크 선호도: {risk_pref}]\n{prompt_extra}"
 
     if st.button("🤖 AI 분석 시작", use_container_width=True, disabled=not gemini_ok):
+        st.session_state["ai_scrap_msg"] = ""
         with st.spinner("🧠 Gemini가 포트폴리오를 분석 중입니다… (30초~1분)"):
-            df = get_portfolio_summary(assets) if assets else pd.DataFrame()
-            indices = get_market_indices()
-            result = get_gemini_analysis(df, scraps_all, indices, full_prompt)
+            _df = get_portfolio_summary(assets) if assets else pd.DataFrame()
+            _idx = get_market_indices()
+            st.session_state["ai_result"] = get_gemini_analysis(_df, scraps_all, _idx, full_prompt)
 
+    # 결과는 session_state에서 읽음 — 버튼 클릭과 무관하게 유지됨
+    _result = st.session_state["ai_result"]
+    if _result:
         st.markdown('<div class="sec">📊 AI 분석 결과</div>', unsafe_allow_html=True)
-        st.markdown(f'<div class="ai-box">{result}</div>', unsafe_allow_html=True)
+        with st.container():
+            st.markdown("""<div style="background:linear-gradient(135deg,#0c1e38,#071428);
+                border:1px solid #1e3d63;border-left:3px solid #4d9fff;
+                border-radius:14px;padding:6px 20px;margin-bottom:12px;">""",
+                unsafe_allow_html=True)
+            st.markdown(_result)
+            st.markdown("</div>", unsafe_allow_html=True)
 
         st.markdown("<br>", unsafe_allow_html=True)
-        if st.button("📎 분석 결과 Notion 스크랩"):
-            ok, msg = add_scrap_notion(
-                f"AI 분석 {datetime.now().strftime('%Y-%m-%d %H:%M')}",
-                "", result[:1800], "전체포트폴리오", "AI분석", "Gemini AI"
-            )
-            st.success(msg) if ok else st.warning(msg)
-            if ok: st.cache_data.clear()
+
+        # 스크랩 버튼 — st.rerun() 없이 session_state만 변경
+        _msg = st.session_state["ai_scrap_msg"]
+        if _msg == "ok":
+            st.success("✅ Notion 스크랩 DB에 저장됐습니다! 📎 스크랩북 메뉴에서 확인하세요.")
+        else:
+            if _msg.startswith("fail:"):
+                st.warning(f"저장 실패: {_msg[5:]}")
+            if st.button("📎 분석 결과 Notion 스크랩", key="ai_scrap_btn"):
+                _ok, _err = add_scrap_notion(
+                    f"AI 분석 {datetime.now().strftime('%Y-%m-%d %H:%M')}",
+                    "", _result[:1900], "전체포트폴리오", "AI분석", "Gemini AI"
+                )
+                st.session_state["ai_scrap_msg"] = "ok" if _ok else f"fail:{_err}"
+                # st.rerun() 사용하지 않음 — session_state 변경으로 자동 반영
 
     # 이전 AI 분석 이력
     ai_scraps = [s for s in scraps_all if s.get("category") == "AI분석"]
