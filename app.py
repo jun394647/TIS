@@ -127,16 +127,16 @@ with st.sidebar:
     st.markdown("---")
 
     # API 설정
-    with st.expander("⚙️ API 설정", expanded=False):
-        st.markdown("<div style='font-size:11px;color:#6b7f99;margin-bottom:8px;'>Streamlit Cloud → Secrets에서 자동 로드</div>", unsafe_allow_html=True)
-        g_key = st.text_input("Gemini API Key", value=os.getenv("GEMINI_API_KEY",""), type="password", key="gkey")
-        n_key = st.text_input("Notion API Key", value=os.getenv("NOTION_API_KEY",""), type="password", key="nkey")
-        p_db  = st.text_input("포트폴리오 DB ID", value=os.getenv("NOTION_PORTFOLIO_DB_ID",""), key="pdb")
-        s_db  = st.text_input("스크랩 DB ID",     value=os.getenv("NOTION_SCRAP_DB_ID",""), key="sdb")
-        if g_key: os.environ["GEMINI_API_KEY"] = g_key
-        if n_key: os.environ["NOTION_API_KEY"] = n_key
-        if p_db:  os.environ["NOTION_PORTFOLIO_DB_ID"] = p_db
-        if s_db:  os.environ["NOTION_SCRAP_DB_ID"] = s_db
+    # with st.expander("⚙️ API 설정", expanded=False):
+    #     st.markdown("<div style='font-size:11px;color:#6b7f99;margin-bottom:8px;'>Streamlit Cloud → Secrets에서 자동 로드</div>", unsafe_allow_html=True)
+    #     g_key = st.text_input("Gemini API Key", value=os.getenv("GEMINI_API_KEY",""), type="password", key="gkey")
+    #     n_key = st.text_input("Notion API Key", value=os.getenv("NOTION_API_KEY",""), type="password", key="nkey")
+    #     p_db  = st.text_input("포트폴리오 DB ID", value=os.getenv("NOTION_PORTFOLIO_DB_ID",""), key="pdb")
+    #     s_db  = st.text_input("스크랩 DB ID",     value=os.getenv("NOTION_SCRAP_DB_ID",""), key="sdb")
+    #     if g_key: os.environ["GEMINI_API_KEY"] = g_key
+    #     if n_key: os.environ["NOTION_API_KEY"] = n_key
+    #     if p_db:  os.environ["NOTION_PORTFOLIO_DB_ID"] = p_db
+    #     if s_db:  os.environ["NOTION_SCRAP_DB_ID"] = s_db
 
     # 연결 상태
     nc = check_notion_connection()
