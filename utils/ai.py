@@ -11,7 +11,7 @@ from datetime import datetime
 
 # ── 사용 가능한 모델 후보 (최신 → 구버전 순) ──────────────────────────────────
 CANDIDATE_MODELS = [
-    "gemini-2.0-flash",
+    "gemini-2.5-flash",
     "gemini-2.0-flash-lite",
     "gemini-1.5-flash",
     "gemini-1.5-flash-latest",
