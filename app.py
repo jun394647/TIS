@@ -21,7 +21,7 @@ def _get_secret(key: str, default: str = "") -> str:
         pass
     return os.getenv(key, default)
 
-for _k in ("GEMINI_API_KEY", "NOTION_API_KEY",
+for _k in ("GEMINI__KEY", "NOTION__KEY",
            "NOTION_PORTFOLIO_DB_ID", "NOTION_SCRAP_DB_ID"):
     _v = _get_secret(_k)
     if _v: os.environ[_k] = _v
@@ -52,7 +52,7 @@ st.set_page_config(page_title="Portfolio AI", page_icon="📈",
 # ── CSS ────────────────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&family=Space+Mono:wght@400;700&display=swap');
+@import url('https://fonts.googles.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&family=Space+Mono:wght@400;700&display=swap');
 :root {
     --bg:#06090f; --bg1:#0c1220; --bg2:#111c2e; --bg3:#172238;
     --accent:#00e5b4; --accent2:#4d9fff; --accent3:#f59e0b;
@@ -126,17 +126,17 @@ with st.sidebar:
 
     st.markdown("---")
 
-    # API 설정
-    # with st.expander("⚙️ API 설정", expanded=False):
-    #     st.markdown("<div style='font-size:11px;color:#6b7f99;margin-bottom:8px;'>Streamlit Cloud → Secrets에서 자동 로드</div>", unsafe_allow_html=True)
-    #     g_key = st.text_input("Gemini API Key", value=os.getenv("GEMINI_API_KEY",""), type="password", key="gkey")
-    #     n_key = st.text_input("Notion API Key", value=os.getenv("NOTION_API_KEY",""), type="password", key="nkey")
-    #     p_db  = st.text_input("포트폴리오 DB ID", value=os.getenv("NOTION_PORTFOLIO_DB_ID",""), key="pdb")
-    #     s_db  = st.text_input("스크랩 DB ID",     value=os.getenv("NOTION_SCRAP_DB_ID",""), key="sdb")
-    #     if g_key: os.environ["GEMINI_API_KEY"] = g_key
-    #     if n_key: os.environ["NOTION_API_KEY"] = n_key
-    #     if p_db:  os.environ["NOTION_PORTFOLIO_DB_ID"] = p_db
-    #     if s_db:  os.environ["NOTION_SCRAP_DB_ID"] = s_db
+     설정
+    with st.expander("⚙️  설정", expanded=False):
+        st.markdown("<div style='font-size:11px;color:#6b7f99;margin-bottom:8px;'>Streamlit Cloud → Secrets에서 자동 로드</div>", unsafe_allow_html=True)
+        g_key = st.text_input("Gemini  Key", value="", type="password", key="gkey")
+        n_key = st.text_input("Notion  Key", value="", type="password", key="nkey")
+        p_db  = st.text_input("포트폴리오 DB ID", value="", key="pdb")
+        s_db  = st.text_input("스크랩 DB ID",     value="", key="sdb")
+        if g_key: os.environ["GEMINI_API_KEY"] = g_key
+        if n_key: os.environ["NOTION_API_KEY"] = n_key
+        if p_db:  os.environ["NOTION_PORTFOLIO_DB_ID"] = p_db
+        if s_db:  os.environ["NOTION_SCRAP_DB_ID"] = s_db
 
     # 연결 상태
     nc = check_notion_connection()
@@ -179,7 +179,7 @@ if page == "🏠 대시보드":
 
     # Notion 미설정 안내
     if not nc["fully_ready"]:
-        st.warning("⚠️ Notion DB가 완전히 설정되지 않았습니다. 사이드바 → API 설정에서 포트폴리오 DB ID와 스크랩 DB ID를 입력해주세요.")
+        st.warning("⚠️ Notion DB가 완전히 설정되지 않았습니다. 사이드바 →  설정에서 포트폴리오 DB ID와 스크랩 DB ID를 입력해주세요.")
 
     # 시장 지수
     st.markdown('<div class="sec">📡 실시간 시장 지표</div>', unsafe_allow_html=True)
@@ -277,7 +277,7 @@ elif page == "💼 포트폴리오 관리":
     st.markdown('<div class="sec">💼 자산 포트폴리오 (Notion DB)</div>', unsafe_allow_html=True)
 
     if not nc["portfolio_db"]:
-        st.error("❌ Notion 포트폴리오 DB ID가 설정되지 않았습니다. 사이드바 → API 설정에서 입력해주세요.")
+        st.error("❌ Notion 포트폴리오 DB ID가 설정되지 않았습니다. 사이드바 →  설정에서 입력해주세요.")
         st.stop()
 
     tab_view, tab_add, tab_edit = st.tabs(["📋 보유 현황", "➕ 자산 추가", "✏️ 수정 / 삭제"])
@@ -590,7 +590,7 @@ elif page == "🤖 AI 분석":
     st.markdown('<div class="sec">🤖 AI 포트폴리오 분석</div>', unsafe_allow_html=True)
 
     if not gemini_ok:
-        st.warning("⚠️ 사이드바 → API 설정에서 Gemini API 키를 입력해주세요.")
+        st.warning("⚠️ 사이드바 →  설정에서 Gemini  키를 입력해주세요.")
 
     scraps_all = _cached_scraps()
     c1, c2, c3 = st.columns(3)
