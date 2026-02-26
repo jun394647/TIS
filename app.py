@@ -126,7 +126,7 @@ with st.sidebar:
 
     st.markdown("---")
 
-     설정
+    #설정
     with st.expander("⚙️  설정", expanded=False):
         st.markdown("<div style='font-size:11px;color:#6b7f99;margin-bottom:8px;'>Streamlit Cloud → Secrets에서 자동 로드</div>", unsafe_allow_html=True)
         g_key = st.text_input("Gemini  Key", value="", type="password", key="gkey")
