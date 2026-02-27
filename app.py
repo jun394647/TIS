@@ -74,11 +74,11 @@ html,body,[class*="css"]{font-family:'Noto Sans KR',sans-serif!important;backgro
 .stat-value{font-family:'Space Mono',monospace;font-size:20px;font-weight:700;color:var(--text);}
 .stat-sub{font-family:'Space Mono',monospace;font-size:12px;margin-top:4px;}
 .up{color:var(--accent)!important;} .dn{color:var(--red)!important;}
-.idx-pill{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px 14px;text-align:center;transition:border-color 0.2s;}
+.idx-pill{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:clamp(6px,1.2vw,10px) clamp(6px,1.2vw,14px);text-align:center;transition:border-color 0.2s;min-width:0;overflow:hidden;}
 .idx-pill:hover{border-color:var(--accent2);}
-.idx-name{font-size:9px;color:var(--muted);letter-spacing:0.8px;text-transform:uppercase;margin-bottom:4px;}
-.idx-val{font-family:'Space Mono',monospace;font-size:14px;font-weight:700;}
-.idx-chg{font-family:'Space Mono',monospace;font-size:10px;margin-top:2px;}
+.idx-name{font-size:clamp(7px,0.7vw,9px);color:var(--muted);letter-spacing:0.5px;text-transform:uppercase;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.idx-val{font-family:'Space Mono',monospace;font-size:clamp(10px,1.1vw,14px);font-weight:700;white-space:nowrap;}
+.idx-chg{font-family:'Space Mono',monospace;font-size:clamp(8px,0.8vw,10px);margin-top:2px;white-space:nowrap;}
 .nc{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:12px 16px;margin-bottom:8px;transition:border-color 0.15s;}
 .nc:hover{border-color:var(--accent2);}
 .nc-title{font-size:13px;font-weight:500;margin-bottom:4px;}
@@ -131,10 +131,10 @@ with st.sidebar:
     # API 설정
     with st.expander("⚙️ API 설정", expanded=False):
         st.markdown("<div style='font-size:11px;color:#6b7f99;margin-bottom:8px;'>Streamlit Cloud → Secrets에서 자동 로드</div>", unsafe_allow_html=True)
-        g_key = st.text_input("Gemini API Key", value="", type="password", key="gkey")
-        n_key = st.text_input("Notion API Key", value="", type="password", key="nkey")
-        p_db  = st.text_input("포트폴리오 DB ID", value="", key="pdb")
-        s_db  = st.text_input("스크랩 DB ID",     value="", key="sdb")
+        g_key = st.text_input("Gemini API Key", value=os.getenv("GEMINI_API_KEY",""), type="password", key="gkey")
+        n_key = st.text_input("Notion API Key", value=os.getenv("NOTION_API_KEY",""), type="password", key="nkey")
+        p_db  = st.text_input("포트폴리오 DB ID", value=os.getenv("NOTION_PORTFOLIO_DB_ID",""), key="pdb")
+        s_db  = st.text_input("스크랩 DB ID",     value=os.getenv("NOTION_SCRAP_DB_ID",""), key="sdb")
         if g_key: os.environ["GEMINI_API_KEY"] = g_key.strip()
         if n_key: os.environ["NOTION_API_KEY"] = n_key.strip()
         if p_db:  os.environ["NOTION_PORTFOLIO_DB_ID"] = p_db.strip()
@@ -184,10 +184,42 @@ with st.sidebar:
 
     usd_krw = get_usd_krw_rate()
     jpy_krw = get_jpy_krw_rate()
-    st.markdown(f"""<div style='font-size:11px;color:#6b7f99;margin-top:8px;line-height:2;'>
-        💱 USD/KRW &nbsp;<b style='color:#dde5f0;font-family:Space Mono,monospace;'>{usd_krw:,.0f}</b><br>
-        💴 JPY/KRW &nbsp;<b style='color:#dde5f0;font-family:Space Mono,monospace;'>{jpy_krw:.2f}</b>
+
+    # 원자재 가격 (사이드바 표시용)
+    import yfinance as _yf
+    def _spot(ticker, fmt="{:.2f}"):
+        try:
+            h = _yf.Ticker(ticker).history(period="2d")
+            if not h.empty:
+                v = float(h["Close"].iloc[-1])
+                prev = float(h["Close"].iloc[-2]) if len(h) > 1 else v
+                chg = (v - prev) / prev * 100 if prev else 0
+                return fmt.format(v), chg
+        except: pass
+        return "—", 0.0
+
+    _gold_v,  _gold_c  = _spot("GC=F", "${:.0f}")
+    _silver_v,_silver_c= _spot("SI=F", "${:.2f}")
+    _wti_v,   _wti_c   = _spot("CL=F", "${:.2f}")
+    _gas_v,   _gas_c   = _spot("NG=F", "${:.3f}")
+
+    def _chg_color(c): return "#00e5b4" if c >= 0 else "#ff4466"
+    def _chg_arrow(c): return "▲" if c >= 0 else "▼"
+
+    st.markdown(f"""<div style='font-size:11px;color:#6b7f99;margin-top:8px;line-height:2.2;'>
+        <div style='font-size:9px;letter-spacing:1px;text-transform:uppercase;color:#4b6080;margin-bottom:2px;'>💱 환율</div>
+        USD/KRW &nbsp;<b style='color:#dde5f0;font-family:Space Mono,monospace;'>{usd_krw:,.0f}</b><br>
+        JPY/KRW &nbsp;<b style='color:#dde5f0;font-family:Space Mono,monospace;'>{jpy_krw:.2f}</b>
         <span style='font-size:10px;'>(100엔)</span>
+        <div style='font-size:9px;letter-spacing:1px;text-transform:uppercase;color:#4b6080;margin:6px 0 2px;'>🏗️ 원자재</div>
+        금 &nbsp;<b style='color:#dde5f0;font-family:Space Mono,monospace;'>{_gold_v}</b>
+        <span style='color:{_chg_color(_gold_c)};font-size:10px;'>{_chg_arrow(_gold_c)}{abs(_gold_c):.1f}%</span><br>
+        은 &nbsp;<b style='color:#dde5f0;font-family:Space Mono,monospace;'>{_silver_v}</b>
+        <span style='color:{_chg_color(_silver_c)};font-size:10px;'>{_chg_arrow(_silver_c)}{abs(_silver_c):.1f}%</span><br>
+        WTI &nbsp;<b style='color:#dde5f0;font-family:Space Mono,monospace;'>{_wti_v}</b>
+        <span style='color:{_chg_color(_wti_c)};font-size:10px;'>{_chg_arrow(_wti_c)}{abs(_wti_c):.1f}%</span><br>
+        천연가스 &nbsp;<b style='color:#dde5f0;font-family:Space Mono,monospace;'>{_gas_v}</b>
+        <span style='color:{_chg_color(_gas_c)};font-size:10px;'>{_chg_arrow(_gas_c)}{abs(_gas_c):.1f}%</span>
     </div>""", unsafe_allow_html=True)
 
 # ── 공통: Notion에서 자산 목록 로드 ──────────────────────────────────────────
@@ -217,23 +249,27 @@ if page == "🏠 대시보드":
     if not nc["fully_ready"]:
         st.warning("⚠️ Notion DB가 완전히 설정되지 않았습니다. 사이드바 → API 설정에서 포트폴리오 DB ID와 스크랩 DB ID를 입력해주세요.")
 
-    # 시장 지수
-    st.markdown('<div class="sec">📡 실시간 시장 지표</div>', unsafe_allow_html=True)
+    # 시장 지수 — 대시보드는 핵심 6개만 표시
+    DASHBOARD_INDICES = ["KOSPI", "KOSDAQ", "S&P 500", "NASDAQ", "DOW JONES", "러셀2000"]
+    st.markdown('<div class="sec">📡 주요 시장 지표</div>', unsafe_allow_html=True)
     with st.spinner("시장 데이터 로딩 중…"):
         indices = get_market_indices()
     if indices:
-        cols_per_row = 6
-        for i in range(0, len(indices), cols_per_row):
-            cols = st.columns(cols_per_row)
-            for j, idx in enumerate(indices[i:i+cols_per_row]):
-                chg = idx["change_pct"]
-                cls = chg_cls(chg)
-                with cols[j]:
-                    st.markdown(f"""<div class="idx-pill">
-                        <div class="idx-name">{idx['name']}</div>
-                        <div class="idx-val {cls}">{idx['value']:,.2f}</div>
-                        <div class="idx-chg {cls}">{chg_arrow(chg)} {abs(chg):.2f}%</div>
-                    </div>""", unsafe_allow_html=True)
+        # 지정한 순서대로 6개만 필터링
+        dash_idx = [i for i in indices if i["name"] in DASHBOARD_INDICES]
+        # 순서 정렬
+        order = {n: i for i, n in enumerate(DASHBOARD_INDICES)}
+        dash_idx = sorted(dash_idx, key=lambda x: order.get(x["name"], 99))
+        cols = st.columns(6)
+        for j, idx in enumerate(dash_idx[:6]):
+            chg = idx["change_pct"]
+            cls = chg_cls(chg)
+            with cols[j]:
+                st.markdown(f"""<div class="idx-pill">
+                    <div class="idx-name">{idx['name']}</div>
+                    <div class="idx-val {cls}">{idx['value']:,.2f}</div>
+                    <div class="idx-chg {cls}">{chg_arrow(chg)} {abs(chg):.2f}%</div>
+                </div>""", unsafe_allow_html=True)
 
     st.markdown("---")
 
@@ -610,7 +646,7 @@ elif page == "📎 스크랩북":
                     <div style="font-size:11px;color:#6b7f99;">{s.get('summary','')[:150]}</div>
                 </div>""", unsafe_allow_html=True)
             with c_d:
-                if st.button("🗑️", key=f"ds_{s.get('page_id','')[:8]}"):
+                if st.button("🗑️", key=f"ds_{hash(s.get('page_id','')) % 9999999}"):
                     with st.spinner("삭제 중…"):
                         ok, msg = delete_scrap_notion(s["page_id"])
                     if ok:
