@@ -387,19 +387,24 @@ if page == "🏠 대시보드":
             _pl_cls = chg_cls(total_pl_krw)
             _day_cls = chg_cls(day_chg_pct)
 
+            _card_data = [
+                ("총 평가가치",    _val_main,              _val_sub,              "",                      ""),
+                ("총 투자비용",    _cost_main,             _cost_sub,             "",                      ""),
+                ("총 손익",        _pl_main,               _pl_sub,               f"{total_pl_pct:+.2f}%", _pl_cls),
+                ("오늘 평균 등락", f"{day_chg_pct:+.2f}%", f"{len(assets)}개 종목", "",                    _day_cls),
+            ]
             c1, c2, c3, c4 = st.columns(4)
-            for col, (label, main, sub, sub2, cls) in zip([c1,c2,c3,c4], [
-                ("총 평가가치",    _val_main,              _val_sub,                        "",                       ""),
-                ("총 투자비용",    _cost_main,             _cost_sub,                       "",                       ""),
-                ("총 손익",        _pl_main,               _pl_sub,                         f"{total_pl_pct:+.2f}%",  _pl_cls),
-                ("오늘 평균 등락", f"{day_chg_pct:+.2f}%", f"{len(assets)}개 종목",         "",                       _day_cls),
-            ]):
+            for col, (label, main, sub, sub2, cls) in zip([c1,c2,c3,c4], _card_data):
+                sub2_html = f'<div class="stat-sub {cls}">{sub2}</div>' if sub2 else ""
                 with col:
-                    st.markdown(f"""<div class="stat-card">
-                        <div class="stat-label">{label}</div>
-                        <div class="stat-value {cls}" title="{sub}">{main}</div>
-                        {f'<div class="stat-sub {cls}">{sub2}</div>' if sub2 else ''}
-                    </div>""", unsafe_allow_html=True)
+                    st.markdown(
+                        f'<div class="stat-card">'
+                        f'<div class="stat-label">{label}</div>'
+                        f'<div class="stat-value {cls}" title="{sub}">{main}</div>'
+                        f'{sub2_html}'
+                        f'</div>',
+                        unsafe_allow_html=True,
+                    )
 
             col_l, col_r = st.columns(2)
             with col_l:
