@@ -68,11 +68,11 @@ html,body,[class*="css"]{font-family:'Noto Sans KR',sans-serif!important;backgro
 .header-bar{background:linear-gradient(135deg,var(--bg1) 0%,var(--bg2) 100%);border:1px solid var(--border);border-radius:16px;padding:20px 28px;margin-bottom:20px;}
 .logo-main{font-size:28px;font-weight:900;letter-spacing:-1px;background:linear-gradient(90deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
 .logo-sub{font-size:12px;color:var(--muted);margin-top:2px;}
-.stat-card{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:18px 22px;transition:border-color 0.2s,transform 0.15s;}
+.stat-card{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:clamp(10px,1.5vw,18px) clamp(10px,1.8vw,22px);transition:border-color 0.2s,transform 0.15s;min-width:0;overflow:hidden;}
 .stat-card:hover{border-color:var(--accent2);transform:translateY(-2px);}
-.stat-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1.2px;margin-bottom:6px;}
-.stat-value{font-family:'Space Mono',monospace;font-size:20px;font-weight:700;color:var(--text);}
-.stat-sub{font-family:'Space Mono',monospace;font-size:12px;margin-top:4px;}
+.stat-label{font-size:clamp(8px,0.65vw,10px);color:var(--muted);text-transform:uppercase;letter-spacing:1.2px;margin-bottom:6px;white-space:nowrap;}
+.stat-value{font-family:'Space Mono',monospace;font-size:clamp(13px,1.4vw,20px);font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.stat-sub{font-family:'Space Mono',monospace;font-size:clamp(10px,0.85vw,12px);margin-top:4px;white-space:nowrap;}
 .up{color:var(--accent)!important;} .dn{color:var(--red)!important;}
 .idx-pill{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:clamp(6px,1.2vw,10px) clamp(6px,1.2vw,14px);text-align:center;transition:border-color 0.2s;min-width:0;overflow:hidden;}
 .idx-pill:hover{border-color:var(--accent2);}
@@ -222,16 +222,59 @@ with st.sidebar:
         <span style='color:{_chg_color(_gas_c)};font-size:10px;'>{_chg_arrow(_gas_c)}{abs(_gas_c):.1f}%</span>
     </div>""", unsafe_allow_html=True)
 
-# ── 공통: Notion에서 자산 목록 로드 ──────────────────────────────────────────
-@st.cache_data(ttl=60)
-def _cached_assets():
-    return load_assets()
+# ══════════════════════════════════════════════════════════════════════════════
+# 앱 시작 시 Notion 데이터 로드 — session_state에 영구 보관
+# st.cache_data는 슬립 후 초기화되므로 사용하지 않음
+# session_state는 같은 세션 내 페이지 이동에서도 유지됨
+# 슬립 후 재접속 시 새 세션이 시작되므로 → 앱 최상단에서 즉시 로드
+# ══════════════════════════════════════════════════════════════════════════════
 
-@st.cache_data(ttl=60)
-def _cached_scraps():
-    return load_scraps()
+def _notion_load_assets() -> list:
+    """Notion에서 자산 로드 — 실패 시 에러를 session_state에 기록"""
+    data, err = load_assets()
+    if err:
+        st.session_state["notion_load_error"] = err
+    else:
+        st.session_state["notion_load_error"] = ""
+    return data
 
-assets = _cached_assets()
+def _notion_load_scraps() -> list:
+    """Notion에서 스크랩 로드"""
+    data, err = load_scraps()
+    return data
+
+# ── session_state 기반 초기화 ────────────────────────────────────────────────
+# "notion_assets_loaded" 플래그가 없으면 → 새 세션(슬립 후 재접속 포함)
+# 반드시 Notion에서 새로 로드해서 session_state에 저장
+if "notion_assets_loaded" not in st.session_state:
+    if nc["portfolio_db"]:
+        with st.spinner("📡 Notion 포트폴리오 로딩 중…"):
+            st.session_state["_assets"] = _notion_load_assets()
+    else:
+        st.session_state["_assets"] = []
+
+    if nc["scrap_db"]:
+        st.session_state["_scraps"] = _notion_load_scraps()
+    else:
+        st.session_state["_scraps"] = []
+
+    st.session_state["notion_assets_loaded"] = True
+
+# 항상 session_state에서 읽음
+assets = st.session_state.get("_assets", [])
+
+# ── session_state 갱신 헬퍼 (추가/수정/삭제 후 호출) ──────────────────────────
+def _refresh_assets():
+    """Notion에서 최신 자산 목록 다시 로드 후 session_state 갱신"""
+    st.session_state["_assets"] = _notion_load_assets()
+
+def _refresh_scraps():
+    """Notion에서 최신 스크랩 목록 다시 로드 후 session_state 갱신"""
+    st.session_state["_scraps"] = _notion_load_scraps()
+
+def _cached_scraps() -> list:
+    """스크랩은 session_state에서 반환"""
+    return st.session_state.get("_scraps", [])
 
 
 # ════════════════════════════════════════════════════════════════════════════════
@@ -245,9 +288,32 @@ if page == "🏠 대시보드":
         </div>
     </div>""", unsafe_allow_html=True)
 
-    # Notion 미설정 안내
+    # Notion 연결 상태 안내
+    _load_err = st.session_state.get("notion_load_error", "")
     if not nc["fully_ready"]:
         st.warning("⚠️ Notion DB가 완전히 설정되지 않았습니다. 사이드바 → API 설정에서 포트폴리오 DB ID와 스크랩 DB ID를 입력해주세요.")
+    elif _load_err:
+        # 로드 실패 — 에러 원인 표시
+        st.error(f"❌ Notion 연결 실패: {_load_err}")
+        if st.button("🔄 다시 연결", use_container_width=False, key="retry_connect"):
+            st.session_state.pop("notion_assets_loaded", None)
+            st.session_state["notion_load_error"] = ""
+            st.rerun()
+    elif not assets and nc["portfolio_db"]:
+        # 설정은 됐는데 포트폴리오가 비어 있을 수 있음 — 자동 재시도
+        with st.spinner("📡 Notion 포트폴리오 연결 중…"):
+            _refresh_assets()
+            assets = st.session_state.get("_assets", [])
+        err_after = st.session_state.get("notion_load_error", "")
+        if err_after:
+            st.error(f"❌ Notion 연결 실패: {err_after}")
+            if st.button("🔄 다시 연결", key="retry_connect2"):
+                st.session_state.pop("notion_assets_loaded", None)
+                st.rerun()
+        elif assets:
+            st.rerun()
+        else:
+            st.info("💡 포트폴리오가 비어 있습니다. '포트폴리오 관리'에서 자산을 추가하세요.")
 
     # 시장 지수 — 대시보드는 핵심 6개만 표시
     DASHBOARD_INDICES = ["KOSPI", "KOSDAQ", "S&P 500", "NASDAQ", "DOW JONES", "러셀2000"]
@@ -288,18 +354,38 @@ if page == "🏠 대시보드":
             total_pl_pct  = (total_pl_krw / cost_krw * 100) if cost_krw else 0
             day_chg_pct   = df["등락률(%)"].mean()
 
+            # 큰 숫자 → 억/만 단위 축약 표시
+            def _fmt_krw(v: float, show_sign: bool = False) -> tuple[str, str]:
+                """(main_label, sub_label) — 억 단위면 억으로, 아니면 만으로"""
+                sign = "+" if show_sign and v >= 0 else ("-" if v < 0 else "")
+                av = abs(v)
+                if av >= 1_0000_0000:  # 1억 이상
+                    main = f"₩{sign}{av/1_0000_0000:,.2f}억"
+                elif av >= 1_0000:     # 1만 이상
+                    main = f"₩{sign}{av/1_0000:,.1f}만"
+                else:
+                    main = f"₩{sign}{av:,.0f}"
+                sub = f"₩{sign}{av:,.0f}"  # 서브라인에 정확한 값
+                return main, sub
+
+            _val_main,  _val_sub  = _fmt_krw(total_val_krw)
+            _cost_main, _cost_sub = _fmt_krw(cost_krw)
+            _pl_main,   _pl_sub   = _fmt_krw(total_pl_krw, show_sign=True)
+            _pl_cls = chg_cls(total_pl_krw)
+            _day_cls = chg_cls(day_chg_pct)
+
             c1, c2, c3, c4 = st.columns(4)
-            for col, (label, val, sub, cls) in zip([c1,c2,c3,c4], [
-                ("총 평가가치",   f"₩{total_val_krw:,.0f}", "",                       ""),
-                ("총 투자비용",   f"₩{cost_krw:,.0f}",      "",                       ""),
-                ("총 손익",       f"₩{total_pl_krw:+,.0f}", f"{total_pl_pct:+.2f}%",  chg_cls(total_pl_krw)),
-                ("오늘 평균 등락",f"{day_chg_pct:+.2f}%",   f"{len(assets)}개 종목",  chg_cls(day_chg_pct)),
+            for col, (label, main, sub, sub2, cls) in zip([c1,c2,c3,c4], [
+                ("총 평가가치",    _val_main,              _val_sub,                        "",                       ""),
+                ("총 투자비용",    _cost_main,             _cost_sub,                       "",                       ""),
+                ("총 손익",        _pl_main,               _pl_sub,                         f"{total_pl_pct:+.2f}%",  _pl_cls),
+                ("오늘 평균 등락", f"{day_chg_pct:+.2f}%", f"{len(assets)}개 종목",         "",                       _day_cls),
             ]):
                 with col:
                     st.markdown(f"""<div class="stat-card">
                         <div class="stat-label">{label}</div>
-                        <div class="stat-value {cls}">{val}</div>
-                        {f'<div class="stat-sub {cls}">{sub}</div>' if sub else ''}
+                        <div class="stat-value {cls}" title="{sub}">{main}</div>
+                        {f'<div class="stat-sub {cls}">{sub2}</div>' if sub2 else ''}
                     </div>""", unsafe_allow_html=True)
 
             col_l, col_r = st.columns(2)
@@ -352,6 +438,18 @@ elif page == "💼 포트폴리오 관리":
         st.error("❌ Notion 포트폴리오 DB ID가 설정되지 않았습니다. 사이드바 → API 설정에서 입력해주세요.")
         st.stop()
 
+    # 슬립 후 깨어난 경우 자동 재연결
+    if not assets and nc["portfolio_db"]:
+        with st.spinner("Notion 재연결 중…"):
+            _refresh_assets()
+            assets = st.session_state.get("_assets", [])
+        if assets:
+            st.rerun()
+        else:
+            st.warning("Notion 연결 중입니다. 잠시 후 새로고침해주세요.")
+            if st.button("🔄 새로고침", key="port_refresh"):
+                _refresh_assets(); st.rerun()
+
     tab_view, tab_add, tab_edit = st.tabs(["📋 보유 현황", "➕ 자산 추가", "✏️ 수정 / 삭제"])
 
     with tab_add:
@@ -384,7 +482,7 @@ elif page == "💼 포트폴리오 관리":
                     st.success(msg)
                     if info.get("valid"):
                         st.info(f"📌 현재가: {info['current_price']:,.4f} {info['currency']} | 섹터: {info.get('sector','—')}")
-                    st.cache_data.clear()
+                    _refresh_assets()
                     st.rerun()
                 else:
                     st.warning(msg)
@@ -460,7 +558,7 @@ elif page == "💼 포트폴리오 관리":
                 with st.spinner("Notion 업데이트 중…"):
                     ok, msg = update_asset_notion(cur["page_id"], new_qty2, new_avg2)
                 if ok:
-                    st.success(msg); st.cache_data.clear(); st.rerun()
+                    st.success(msg); _refresh_assets(); st.rerun()
                 else:
                     st.error(msg)
 
@@ -473,7 +571,7 @@ elif page == "💼 포트폴리오 관리":
                 with st.spinner("Notion에서 삭제 중…"):
                     ok, msg = remove_asset_notion(del_asset["page_id"])
                 if ok:
-                    st.success(msg); st.cache_data.clear(); st.rerun()
+                    st.success(msg); _refresh_assets(); st.rerun()
                 else:
                     st.error(msg)
 
@@ -650,7 +748,7 @@ elif page == "📎 스크랩북":
                     with st.spinner("삭제 중…"):
                         ok, msg = delete_scrap_notion(s["page_id"])
                     if ok:
-                        st.cache_data.clear(); st.rerun()
+                        _refresh_scraps(); st.rerun()
                     else:
                         st.error(msg)
 
