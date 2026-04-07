@@ -518,7 +518,7 @@ elif page == "💼 포트폴리오 관리":
                         if val > 0: return "color:#00e5b4;font-weight:600"
                         elif val < 0: return "color:#ff4466;font-weight:600"
                     return ""
-                styled = df.style.applymap(highlight, subset=["손익","손익(KRW)","손익률(%)","등락률(%)"])
+                styled = df.style.map(highlight, subset=["손익","손익(KRW)","손익률(%)","등락률(%)"])
                 st.dataframe(styled, use_container_width=True, height=400)
 
                 total_val_krw = df["현재가치(KRW)"].sum()
@@ -625,7 +625,7 @@ elif page == "₿ 암호화폐":
                     return ("color:#00e5b4;font-weight:600" if v>0
                             else "color:#ff4466;font-weight:600" if v<0 else "")
                 return ""
-            st.dataframe(c_df.style.applymap(color_num, subset=["손익","손익(KRW)","손익률(%)"]),
+            st.dataframe(c_df.style.map(color_num, subset=["손익","손익(KRW)","손익률(%)"]),
                 use_container_width=True)
     else:
         st.info("보유 암호화폐가 없습니다. 포트폴리오 관리에서 유형을 '암호화폐'로 추가하세요.")
