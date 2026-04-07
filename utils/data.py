@@ -202,21 +202,21 @@ def get_news_for_asset(ticker: str, company_name: str = "", asset_type: str = ""
     """보유 자산 최신 뉴스 & 리서치"""
     base = company_name if company_name else ticker.split("-")[0].replace(".KS","").replace(".KQ","")
     is_intl = asset_type in ["미국주식","ETF","암호화폐"]
-    items = _parse_feed(_build_url(f"{base} 주식 투자", "ko"), 8)
+    items = _parse_feed(_build_url(f"{base}", "ko"), 8)
     if is_intl:
         items += _parse_feed(_build_url(f"{base} stock investment", "en"), 8)
     return _dedup(items)[:max_items]
 
 def get_general_market_news(max_items: int = 12) -> list:
     """시장 전반 최신 뉴스"""
-    ko = _parse_feed(_build_url("주식 증시 금리 시황 경제", "ko"), 8)
-    en = _parse_feed(_build_url("stock market fed rate economy", "en"), 8)
+    ko = _parse_feed(_build_url("주식 증시 금리 시황 경제 when:1d", "ko"), 8)
+    en = _parse_feed(_build_url("stock market fed rate economy when:1d", "en"), 8)
     return _dedup(ko + en)[:max_items]
 
 def get_crypto_news(max_items: int = 10) -> list:
     """암호화폐 최신 뉴스"""
-    ko = _parse_feed(_build_url("비트코인 이더리움 암호화폐 코인", "ko"), 7)
-    en = _parse_feed(_build_url("bitcoin ethereum crypto DeFi", "en"), 7)
+    ko = _parse_feed(_build_url("비트코인 이더리움 암호화폐 코인 when:1d", "ko"), 7)
+    en = _parse_feed(_build_url("bitcoin ethereum crypto DeFi when:1d", "en"), 7)
     return _dedup(ko + en)[:max_items]
 
 def get_research_news(query: str, max_items: int = 8) -> list:
